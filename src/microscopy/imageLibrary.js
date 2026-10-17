@@ -8,7 +8,7 @@ const base = import.meta.env.BASE_URL
 export const REAL_IMAGES = {
   vivax: {
     ring: [
-      { src: 'parasites/vivax-ring-2.jpg', credit: 'CDC DPDx / Merlin magicien (CC BY 2.0)' },
+      { src: 'parasites/vivax-ring-1.jpg', credit: 'Dr Graham Beards (CC BY-SA 4.0)' },
     ],
     trophozoite: [
       { src: 'parasites/vivax-trophozoite-1.jpg', credit: 'Dr Osaro Erhabor (CC BY-SA 3.0)' },
@@ -23,7 +23,7 @@ export const REAL_IMAGES = {
   },
   falciparum: {
     ring: [
-      { src: 'parasites/falciparum-ring-1.jpg', credit: 'Dr Graham Beards (CC BY-SA 4.0)' },
+      { src: 'parasites/falciparum-ring-3.jpg', credit: 'CDC DPDx / Merlin magicien (CC BY 2.0)' },
       { src: 'parasites/falciparum-ring-2.jpg', credit: 'Dr Osaro Erhabor (CC BY-SA 3.0)' },
     ],
     gametocyte: [

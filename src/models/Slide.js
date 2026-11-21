@@ -26,8 +26,8 @@ export function createSlide(label = '') {
   labelZone.position.set(-3.0, 0.07, 0)
   group.add(labelZone)
 
-  // 滴血锚点：距右端 2.2cm 处（薄血膜标准位置）
-  group.userData.bloodAnchor = new THREE.Vector3(1.6, 0.15, 0)
+  // 滴血锚点：距左端 2.2cm 处（薄血膜标准位置，推片由此向右推）
+  group.userData.bloodAnchor = new THREE.Vector3(-1.6, 0.15, 0)
   group.userData.label = label
   return group
 }
@@ -74,20 +74,5 @@ export function createThickFilm() {
   return film
 }
 
-/** 薄血膜：舌状（泪滴形），用 Shape 拉伸实现 */
-export function createThinFilm(quality = 'good') {
-  const shape = new THREE.Shape()
-  // 舌状：宽头渐窄收尾；质量差时做断裂/波纹
-  shape.moveTo(0, -1.1)
-  shape.bezierCurveTo(1.1, -1.1, 1.15, -0.3, 1.05, 0.4)
-  shape.bezierCurveTo(0.95, 1.0, 0.4, 2.6, 0, 3.4)
-  shape.bezierCurveTo(-0.4, 2.6, -0.95, 1.0, -1.05, 0.4)
-  shape.bezierCurveTo(-1.15, -0.3, -1.1, -1.1, 0, -1.1)
-
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false })
-  geo.rotateX(-Math.PI / 2)
-  const color = quality === 'good' ? 0xb8402f : 0x9c4a3d
-  const film = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.6 }))
-  film.name = 'thinFilm'
-  return film
-}
+// 注：薄血膜（thinFilm）由 Step3_Smear 的 _rebuildRibbon 按学生拖动轨迹实时生长，
+// 舌状外形（钝边基底→平行体部→圆弧舌尖）与头深尾浅的顶点色渐变均在该函数内构建。

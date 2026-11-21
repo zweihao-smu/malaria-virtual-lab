@@ -136,16 +136,17 @@ export default {
       this._hideAngleSlider()
       dialog.info('已对准载玻片A，<b>按住血滴画圈搅拌</b>，涂成约 1cm 圆斑')
     } else {
-      pivot.position.set(anchor.x - 0.6, SLIDE_TOP, anchor.z)
+      pivot.position.set(anchor.x + 0.6, SLIDE_TOP, anchor.z)
       this._setPivotAngle() // 按当前滑块值倾斜
       this._showAngleSlider(ctx)
-      dialog.info('已对准载玻片B，调好角度后<b>按住向左匀速推片</b>')
+      dialog.info('已对准载玻片B，调好角度后<b>按住向右匀速推片</b>')
     }
   },
 
   _setPivotAngle() {
     if (!this._pivot) return
-    this._pivot.rotation.set(0, 0, (this._angle * Math.PI) / 180)
+    // 负号：推片从左向右推，板面向推进方向（+x）倾斜，棱边压在血膜末端
+    this._pivot.rotation.set(0, 0, (-this._angle * Math.PI) / 180)
   },
 
   // ---------- 拖动 ----------
@@ -235,8 +236,8 @@ export default {
   // ---- 薄血膜：推片倾斜跟随 + 条带生长 ----
   _pushThin(ctx, p) {
     const a = this._anchor
-    // 只在玻片范围内采样（锚点向左最多 4.4cm）
-    const sx = Math.max(-4.4, Math.min(0, p.x - a.x))
+    // 只在玻片范围内采样（锚点向右最多 4.4cm）
+    const sx = Math.max(0, Math.min(4.4, p.x - a.x))
     if (Math.abs(p.z - a.z) > 1.6) return
     if (this._pivot) this._pivot.position.set(a.x + sx, SLIDE_TOP, a.z)
 
@@ -245,7 +246,7 @@ export default {
     if (prev) {
       const dt = now - prev.t
       if (dt < 12) return
-      const v = Math.max(((prev.sx - sx) * 100) / dt, 0.01) // cm/s（向左为正）
+      const v = Math.max(((sx - prev.sx) * 100) / dt, 0.01) // cm/s（向右为正）
       // 厚度模型（视觉）：tan(角度)/速度，系数按 cm 尺度调
       const th = Math.min((3 * Math.tan((this._angle * Math.PI) / 180)) / v, 3)
       const w = Math.min(0.35 + 0.35 * th, 1.1)
@@ -263,13 +264,57 @@ export default {
     const s = this._samples
     if (this._ribbon) { ctx.engine.scene.remove(this._ribbon); this._ribbon.geometry.dispose() }
     if (s.length < 2) return
-    const hOf = (th) => 0.015 + Math.min(th * 0.045, 0.14)
-    const pts = s.map((p) => ({ x: p.sx, hw: p.w / 2, y: hOf(p.th) }))
-    pts.push({ x: s[s.length - 1].sx - 0.5, hw: 0, y: 0.012 }) // 羽状尾
-    const pos = []
+    const len = Math.abs(s[s.length - 1].sx) // 当前血膜长度（sx ≥ 0，从锚点向右延伸）
+
+    // 把拖动采样按 0.12cm 均匀重采样并平滑 w/th——拖动事件间距不匀会让
+    // 半宽逐点抖动，舌尖圆弧段只有几个采样点时会呈"阶梯/缺口"状
+    const STEP = 0.12
+    const n = Math.max(2, Math.floor(len / STEP) + 1)
+    let j = 0
+    const rs = [] // {x, w, th}
+    for (let i = 0; i < n; i++) {
+      const x = Math.min(i * STEP, len)
+      while (j < s.length - 2 && s[j + 1].sx < x) j++
+      const p0 = s[j], p1 = s[j + 1]
+      const k = p1.sx === p0.sx ? 0 : Math.min(Math.max((x - p0.sx) / (p1.sx - p0.sx), 0), 1)
+      rs.push({ x, w: p0.w + (p1.w - p0.w) * k, th: p0.th + (p1.th - p0.th) * k })
+    }
+    // 滑动平均（窗口 5）抚平半宽抖动，保持体部两侧平行
+    for (let i = 0; i < rs.length; i++) {
+      let sw = 0, st = 0, c = 0
+      for (let d = -2; d <= 2; d++) {
+        const q = rs[i + d]
+        if (!q) continue
+        sw += q.w; st += q.th; c++
+      }
+      rs[i].ws = sw / c; rs[i].ths = st / c
+    }
+
+    // 舌状半宽包络：起始端平直钝边（全宽）→ 体部两侧近乎平行（约 1.5cm 宽）
+    // → 末端以超椭圆剖面（p=1.5，比半圆尖细）收口成舌尖，t=1 处导数为 0，
+    //   与体部光滑连接
+    const bodyOf = (ws) => 0.45 + 0.3 * Math.min(ws / 1.1, 1)
+    const TAPER = Math.min(1.2, len * 0.55)
+    const taperK = (x) => { // x: 局部坐标（≥0）；返回收口系数 1=不收
+      const t = (len - Math.abs(x)) / TAPER
+      return t >= 1 ? 1 : Math.pow(1 - Math.pow(1 - t, 1.5), 1 / 1.5)
+    }
+    const pts = rs.map((p) => {
+      const k = taperK(p.x)
+      const h = 0.015 + Math.min(p.ths * 0.045, 0.14)
+      return { x: p.x, hw: bodyOf(p.ws) * k, y: h * (k >= 1 ? 1 : 0.45 + 0.55 * k) }
+    })
+    pts.push({ x: len + 0.1, hw: 0.015, y: 0.006 }) // 收尖
+    // 顶点色：起始端深红 → 舌尖浅粉，模拟血膜头厚尾薄
+    const cDark = new THREE.Color(0x651010)
+    const cLight = new THREE.Color(0xd49284)
+    const tmp = new THREE.Color()
+    const pos = [], col = []
     for (const p of pts) {
       pos.push(p.x, p.y, -p.hw, p.x, p.y, p.hw)
       pos.push(p.x, 0.004, -p.hw, p.x, 0.004, p.hw)
+      tmp.copy(cDark).lerp(cLight, Math.min((Math.abs(p.x) / 4.4) * 1.1, 1))
+      for (let k = 0; k < 4; k++) col.push(tmp.r, tmp.g, tmp.b)
     }
     const idx = []
     for (let i = 0; i < pts.length - 1; i++) {
@@ -280,19 +325,24 @@ export default {
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
     geo.setIndex(idx)
     geo.computeVertexNormals()
     const ribbon = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-      color: 0xb8402f, roughness: 0.45, transparent: true, opacity: 0.92,
+      // 双面：条带顶点沿 -x 生长，顶面三角形绕序朝下，单面会被视锥剔除成"描边"
+      vertexColors: true, roughness: 0.45, transparent: true, opacity: 0.94,
+      side: THREE.DoubleSide,
     }))
-    // 断带白条
+    // 断带白条（速度突变标记）
     for (const p of s) {
       if (!p.streak) continue
+      const k = taperK(p.sx)
       const bar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.05, 0.01, p.w),
+        new THREE.BoxGeometry(0.05, 0.01, bodyOf(p.w) * k * 2),
         new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.8 })
       )
-      bar.position.set(p.sx, hOf(p.th) + 0.006, 0)
+      const h = (0.015 + Math.min(p.th * 0.045, 0.14)) * (k >= 1 ? 1 : 0.45 + 0.55 * k)
+      bar.position.set(p.sx, h + 0.006, 0)
       ribbon.add(bar)
     }
     ribbon.position.set(this._anchor.x, FILM_Y, this._anchor.z)
@@ -354,7 +404,8 @@ export default {
       state.thinFilmQuality = quality
       if (this._ribbon) {
         this._ribbon.name = 'thinFilm' // 实时条带即成品
-        this._ribbon.material.color.setHex(quality === 'good' ? 0xb8402f : 0x9c4a3d)
+        // 顶点色与 material.color 相乘：合格保持自然血色，不合格做灰暗提示
+        this._ribbon.material.color.setHex(quality === 'good' ? 0xffffff : 0xcf9a8d)
       }
       if (quality === 'good') {
         score.correct(3, `薄血膜制作优良（角度 ${this._angle}°）`)

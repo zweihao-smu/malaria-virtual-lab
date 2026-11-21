@@ -28,6 +28,8 @@ export function createSlide(label = '') {
 
   // 滴血锚点：距左端 2.2cm 处（薄血膜标准位置，推片由此向右推）
   group.userData.bloodAnchor = new THREE.Vector3(-1.6, 0.15, 0)
+  // 厚血膜锚点：玻片中央（厚血膜规范位置，与薄血膜区分）
+  group.userData.thickAnchor = new THREE.Vector3(0.3, 0.15, 0)
   group.userData.label = label
   return group
 }
@@ -38,17 +40,19 @@ export function createPusher() {
   group.name = 'pusher'
   const glass = new THREE.Mesh(
     new THREE.BoxGeometry(7.6, 0.12, 2.6),
-    new THREE.MeshPhysicalMaterial({ color: 0xeef6ff, transparent: true, opacity: 0.45, roughness: 0.08 })
+    // 不透明度调高：倾斜推片在玻片上方要清晰可辨
+    new THREE.MeshPhysicalMaterial({ color: 0xeef6ff, transparent: true, opacity: 0.62, roughness: 0.08 })
   )
   glass.position.y = 0.06
   glass.castShadow = true
   group.add(glass)
   // 边缘标记条，便于学生辨认推片的"工作边"
   const edge = new THREE.Mesh(
-    new THREE.BoxGeometry(0.15, 0.16, 2.6),
+    new THREE.BoxGeometry(0.22, 0.16, 2.6),
     new THREE.MeshStandardMaterial({ color: 0x60a5fa })
   )
-  edge.position.set(-3.8, 0.08, 0)
+  // 抬高一档：棱边随枢轴旋转时下角有杠杆位移，避免扎进玻片
+  edge.position.set(-3.8, 0.15, 0)
   group.add(edge)
   return group
 }
@@ -62,6 +66,27 @@ export function createBloodDrop(radius = 0.45) {
   drop.scale.y = 0.55
   drop.name = 'bloodDrop'
   return drop
+}
+
+/**
+ * 厚血膜用血滴簇：2–3 小滴聚在一起（规范操作血量）。
+ * 整体命名为 bloodDrop（子滴不命名），Step3 按名字找到整簇做摊平动画。
+ */
+export function createBloodDropCluster() {
+  const cluster = new THREE.Group()
+  cluster.name = 'bloodDrop'
+  const drops = [
+    { r: 0.26, dx: -0.2, dz: 0.08 },
+    { r: 0.22, dx: 0.16, dz: -0.1 },
+    { r: 0.24, dx: 0.02, dz: 0.18 },
+  ]
+  for (const { r, dx, dz } of drops) {
+    const d = createBloodDrop(r)
+    d.name = '' // 避免被 _findDrop 单独命中（位置是局部坐标，距离判断会错）
+    d.position.set(dx, 0, dz)
+    cluster.add(d)
+  }
+  return cluster
 }
 
 /** 厚血膜：直径约 1cm 的圆形血膜 */

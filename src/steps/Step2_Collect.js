@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { createBloodDrop } from '../models/Slide.js'
+import { createBloodDrop, createBloodDropCluster } from '../models/Slide.js'
 
 /**
  * 步骤 2：末梢采血
@@ -127,14 +127,16 @@ export default {
       return
     }
     const slide = which === 'A' ? lab.slideA : lab.slideB
-    const drop = createBloodDrop(which === 'A' ? 0.5 : 0.32)
-    const anchor = slide.userData.bloodAnchor.clone()
+    // 厚血膜：中央锚点 + 2–3 滴血簇（规范血量）；薄血膜：单小滴
+    const drop = which === 'A' ? createBloodDropCluster() : createBloodDrop(0.32)
+    const anchorKey = which === 'A' ? 'thickAnchor' : 'bloodAnchor'
+    const anchor = slide.userData[anchorKey].clone()
     slide.localToWorld(anchor)
     drop.position.copy(anchor)
     ctx.engine.scene.add(drop)
     if (which === 'A') { state.thickOnA = true; state.dropsTaken++ } else { state.thinOnB = true; state.dropsTaken++ }
     score.correct(2, `载玻片${which} 取血`)
-    dialog.success(`载玻片 ${which} 已取到血滴`)
+    dialog.success(which === 'A' ? '载玻片 A 已取到血滴（厚血膜需 2–3 滴，滴于玻片中央）' : '载玻片 B 已取到血滴')
 
     if (state.dropsTaken >= 2) {
       ctx.hud.showBanner('步骤 2 完成')

@@ -85,9 +85,11 @@ export default {
     engine.scene.add(pivot)
     pivot.add(lab.pusher) // 重挂（自动脱离原父级）
     if (mode === 'edge') {
-      // 棱边（短端工作边，带蓝条）落在枢轴原点；枢轴绕 z 旋转 α = 板面与片面夹角
-      lab.pusher.position.set(3.8, 0, 0)
-      lab.pusher.rotation.set(0, 0, 0)
+      // 棱边（短端工作边，带蓝条）落在枢轴原点；推片绕 y 翻面使板面向 -x
+      // （血膜侧）延伸，枢轴绕 z 旋转 +α 后板面向血膜上方后仰、开口朝推进
+      // 方向——若板面朝 +x 再配负角会插进台面（穿帮且推片几乎不可见）
+      lab.pusher.position.set(-3.8, 0, 0)
+      lab.pusher.rotation.set(0, Math.PI, 0)
     } else {
       // 下角点落在枢轴原点；后仰 + 偏航 → 只留尖角接触
       lab.pusher.position.set(3.8, 0, -1.3)
@@ -125,7 +127,8 @@ export default {
     }
     this._target = which
     const slide = which === 'A' ? lab.slideA : lab.slideB
-    const anchor = slide.userData.bloodAnchor.clone()
+    // 厚血膜滴于玻片中央（thickAnchor），薄血膜用左侧滴血锚点（bloodAnchor）
+    const anchor = (which === 'A' ? slide.userData.thickAnchor : slide.userData.bloodAnchor).clone()
     slide.localToWorld(anchor)
     this._anchor = anchor
 
@@ -136,7 +139,7 @@ export default {
       this._hideAngleSlider()
       dialog.info('已对准载玻片A，<b>按住血滴画圈搅拌</b>，涂成约 1cm 圆斑')
     } else {
-      pivot.position.set(anchor.x + 0.6, SLIDE_TOP, anchor.z)
+      pivot.position.set(anchor.x + 0.15, SLIDE_TOP, anchor.z) // 蓝边轻贴血滴右缘
       this._setPivotAngle() // 按当前滑块值倾斜
       this._showAngleSlider(ctx)
       dialog.info('已对准载玻片B，调好角度后<b>按住向右匀速推片</b>')
@@ -145,7 +148,8 @@ export default {
 
   _setPivotAngle() {
     if (!this._pivot) return
-    // 负号：推片从左向右推，板面向推进方向（+x）倾斜，棱边压在血膜末端
+    // 推片已翻面（板面向 -x/血膜侧延伸）：必须配 -α，自由端才向上抬起
+    // （(-d,0) 绕 z 转 -α 后 y=+d·sinα）；配 +α 板面会沉入台面穿模
     this._pivot.rotation.set(0, 0, (-this._angle * Math.PI) / 180)
   },
 

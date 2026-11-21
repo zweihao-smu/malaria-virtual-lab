@@ -16,7 +16,10 @@ import { createThickFilm } from '../models/Slide.js'
  */
 
 const SLIDE_TOP = 0.24      // 玻片表面世界高度
-const FILM_Y = 0.16         // 成品血膜的 y（与原实现一致，嵌在透明玻璃中）
+// 血膜在玻片表面之上（底面高出 0.005 避免深度冲突）。
+// 曾嵌在玻璃内部（0.16）：正俯视时透明玻璃后渲染盖住血膜，薄的体部/舌尖被
+// 冲淡到不可见，只剩最厚的头部——血膜应涂于玻片表面，任何视角可见。
+const FILM_Y = 0.245
 const THICK_SECTORS = 8
 const SECTOR_NEED = 1.5     // 每扇区至少扫过 1.5 rad 算涂匀
 const PATCH_R0 = 0.27       // 血斑初始半径 cm
